@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+pip-wheel-metadata/
+.eggs/
+*.manifest
+*.spec
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+htmlcov/
+.tox/
+.pytest_cache/
+.coverage
+*.cover
+
+# Test files (debug/temporary)
+test_*.py
+teste_*.py
+tests/test_*.py
+tests/teste_*.py
+*_test.py
+*_debug.py
+*_debug2.py
+verificar.py
+out.txt
+err.txt
+srv_err.txt
+srv_out.txt
+test_output.txt
+test_final.txt
+test_err.txt
+server.log
+server_err.log
+
+# Data files
+data/encrypted/resume.enc
+data/secret.key
+
+# Packaging
+*.tar.gz
+*.zip
+*.rar
+
+# Node (if any)
+node_modules/
+package-lock.json
+
+# Uvicorn
+*.pid
+*.lock
+
+# Static files
+backend/__pycache__/
+static/

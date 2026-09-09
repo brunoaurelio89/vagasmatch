@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VagaMatch - Encontre vagas compatíveis com seu currículo">
+    <title>VagaMatch</title>
+    <meta name="theme-color" content="#0ea5e9">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+    <link rel="stylesheet" href="/static/style.css?v=4">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🧭</span>
+                <span class="logo-text">VagaMatch</span>
+            </div>
+            <div class="user-info" id="userInfo" style="display:none;">
+                <span id="userName"></span>
+                <button class="btn btn-outline btn-sm" id="logoutBtn">Sair</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Step 1: Upload Currículo -->
+            <section class="card step-section" id="step1">
+                <h2 class="section-title">
+                    <span class="step-number">1</span>
+                    Envie seu currículo
+                </h2>
+                <p class="section-description">
+                    Anexe seu currículo em PDF, DOCX ou TXT. Analisamos automaticamente
+                    seu perfil e buscamos vagas compatíveis. Seus dados são criptografados.
+                </p>
+
+                <!-- Upload de arquivo -->
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt" hidden>
+                    <div class="upload-dropzone" id="dropzone">
+                        <div class="upload-icon">📄</div>
+                        <p class="upload-text">Arraste seu currículo aqui ou</p>
+                        <button type="button" class="btn btn-outline" id="btnSelecionar">
+                            Selecionar arquivo
+                        </button>
+                        <p class="upload-hint">Formatos: PDF, DOCX, DOC, TXT (máx 10MB)</p>
+                    </div>
+                </div>
+
+                <!-- Preview após upload -->
+                <div class="resume-preview" id="resumePreview" style="display:none;"></div>
+            </section>
+
+            <!-- Step 2: Buscar Vagas -->
+            <section class="card step-section" id="step2">
+                <h2 class="section-title">
+                    <span class="step-number">2</span>
+                    Buscar vagas
+                </h2>
+
+                <form id="searchForm" class="search-form-compact">
+                    <!-- Linha principal: termo de busca e botao -->
+                    <div class="search-main-row">
+                        <div class="search-input-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="termo_busca" name="termo_busca" class="input-search"
+                                placeholder="Vaga desejada (ex: Desenvolvedor Python)..." required aria-label="Termo de busca" autocomplete="off">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-search" id="searchBtn">
+                            <span id="searchText">Buscar</span>
+                            <span id="searchLoading" class="loading-dots" style="display:none;">
+                                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                            </span>
+                        </button>
+                    </div>
+
+                    <!-- Filtros compactos em uma linha -->
+                    <div class="search-filters-row">
+                        <div class="filter-chip">
+                            <span class="filter-label">📍</span>
+                            <input type="text" id="regiao" name="regiao" class="filter-input"
+                                placeholder="Localização" aria-label="Localização">
+                        </div>
+
+                        <!-- Ordenação -->
+                        <div class="ordenacao-dropdown" id="ordenacaoDropdown">
+                            <button type="button" class="ordenacao-trigger" id="ordenacaoTrigger" aria-haspopup="listbox" aria-expanded="false">
+                                <span class="ordenacao-label">Ordenar:</span>
+                                <span class="ordenacao-valor" id="ordenacaoValor">Relevância</span>
+                                <svg class="ordenacao-icon" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                    <path d="M3 5L6 8L9 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </button>
+                            <ul class="ordenacao-menu" id="ordenacaoMenu" role="listbox" aria-label="Opções de ordenação">
+                                <li class="ordenacao-option active" role="option" aria-selected="true" data-value="relevancia">Relevância</li>
+                                <li class="ordenacao-option" role="option" aria-selected="false" data-value="recentes">Mais recentes</li>
+                                <li class="ordenacao-option" role="option" aria-selected="false" data-value="distancia">Menor distância</li>
+                            </ul>
+                        </div>
+
+                        <!-- Filtro: ultimos 15 dias -->
+                        <label class="filtro-15dias filter-toggle" title="Apenas vagas dos ultimos 15 dias">
+                            <input type="checkbox" id="ultimos15dias" name="ultimos15dias" aria-label="Apenas vagas dos ultimos 15 dias">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">15 dias</span>
+                        </label>
+
+                        <div class="filter-chip-group" data-label="Modalidade" role="group" aria-label="Filtros de modelo de trabalho">
+                            <button type="button" class="filter-tag" data-name="modelo" data-value="remoto" aria-label="Filtrar por vagas remotas" aria-pressed="false">Remoto</button>
+                            <button type="button" class="filter-tag" data-name="modelo" data-value="híbrido" aria-label="Filtrar por vagas híbridas" aria-pressed="false">Híbrido</button>
+                            <button type="button" class="filter-tag" data-name="modelo" data-value="presencial" aria-label="Filtrar por vagas presenciais" aria-pressed="false">Presencial</button>
+                        </div>
+
+                        <div class="filter-chip-group" data-label="Fonte" role="group" aria-label="Filtros de fonte de vagas">
+                            <button type="button" class="filter-tag" data-name="fonte" data-value="google" aria-label="Filtrar vagas do Google" aria-pressed="false">Google</button>
+                            <button type="button" class="filter-tag" data-name="fonte" data-value="linkedin" aria-label="Filtrar vagas do LinkedIn" aria-pressed="false">LinkedIn</button>
+                            <button type="button" class="filter-tag" data-name="fonte" data-value="indeed" aria-label="Filtrar vagas do Indeed" aria-pressed="false">Indeed</button>
+                            <button type="button" class="filter-tag" data-name="fonte" data-value="jooble" aria-label="Filtrar vagas do Jooble" aria-pressed="false">Jooble</button>
+                        </div>
+
+                        <label class="filter-toggle" title="Filtrar por nível compatível">
+                            <input type="checkbox" name="nivel_compativel" checked aria-label="Filtrar apenas vagas compatíveis com o seu nível">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Nível compatível</span>
+                        </label>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Step 3: Resultados -->
+            <section class="card step-section" id="step3" style="display:none;">
+                <div class="results-header">
+                    <h2 class="section-title">
+                        <span class="step-number">3</span>
+                        Análise da vaga
+                    </h2>
+                    <div class="results-summary" id="resultsSummary"></div>
+                </div>
+
+                <div class="results-actions" style="margin-top: 16px; padding: 12px; background: var(--bg-secondary, #f8f9fa); border-radius: 8px; display: none;" id="skeletonLoading">
+                    <div class="skeleton-lines">
+                        <div class="skeleton-line" style="width: 120px; height: 24px;"></div>
+                        <div class="skeleton-line" style="width: 80px; height: 24px;"></div>
+                        <div class="skeleton-line" style="width: 120px; height: 24px;"></div>
+                    </div>
+                </div>
+
+                <div id="jobsContainer" class="jobs-grid">
+                    <!-- Resultado da análise preenchido via JS -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>VagaMatch v1.0 — Busca inteligente de vagas • <a href="#" id="aboutLink">Sobre</a></p>
+    </footer>
+
+    <!-- Toast de feedback -->
+    <div id="toast" class="toast"></div>
+
+    <script src="/static/app.js?v=3"></script>
+</body>
+</html>
