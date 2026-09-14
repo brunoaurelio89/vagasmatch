@@ -351,7 +351,6 @@ class VagaMatchApp {
                 <h4 style="font-weight: 600;">Currículo capturado:</h4>
                 <span style="color: #22c55e; font-weight: 600;">✓ Pronto</span>
             </div>
-            <div style="margin-bottom: 12px;"><strong>${curriculo.nome || "Nome não informado"}</strong></div>
             <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
                 <strong>Habilidades (${habilidades.length} detectadas):</strong>
             </div>

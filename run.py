@@ -44,9 +44,7 @@ def main():
     print("[📡] Fontes de vagas suportadas:")
     print("       • Google Jobs (via SerpAPI) - " + ("configurado ✅" if os.getenv("SERPAPI_KEY") else "não configurado"))
     print("       • Jooble - " + ("configurado ✅" if os.getenv("JOOBLE_API_KEY") else "não configurado"))
-    print("       • Indeed (via RapidAPI) - " + ("configurado ✅" if os.getenv("RAPIDAPI_KEY") else "não configurado"))
-    print("       • Glassdoor (via RapidAPI) - " + ("configurado ✅" if os.getenv("RAPIDAPI_KEY") else "não configurado"))
-    print("       • JSearch (via RapidAPI) - " + ("configurado ✅" if os.getenv("RAPIDAPI_KEY") else "não configurado"))
+    print("       • Indeed (fallback Indeed11/Indeed12/JSearch, via RapidAPI) - " + ("configurado ✅" if os.getenv("RAPIDAPI_KEY") else "não configurado"))
     print()
 
     if os.getenv("SERPAPI_KEY") is None:

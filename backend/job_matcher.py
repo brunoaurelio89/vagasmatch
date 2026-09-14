@@ -48,6 +48,15 @@ def extrair_habilidades(texto: str) -> Set[str]:
         "machine learning", "ml", "deep learning", "nlp",
         "data science", "data analysis", "pandas", "numpy", "matplotlib",
         "excel", "power bi", "tableau", "looker",
+        # Qualidade de software e testes
+        "qa", "quality assurance", "qualidade de software",
+        "software testing", "software test", "testes de software",
+        "testes manuais", "testes automatizados", "automação de testes",
+        "test automation", "manual testing", "automated testing",
+        "selenium", "cypress", "playwright", "postman", "jmeter",
+        "junit", "pytest", "testng", "cucumber", "gherkin", "bdd", "tdd",
+        "testes de api", "testes de integração", "testes de regressão",
+        "testes funcionais", "testes de performance", "testes de aceitação",
         # novas habilidades técnicas
         "react native", "flutter", "ionic", "android", "ios", "swift", "kotlin",
         "php", "laravel", "symfony", "ruby", "rails", "perl", "powershell",

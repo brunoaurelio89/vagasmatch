@@ -32,6 +32,23 @@ JOOBLE_API_KEY = os.getenv("JOOBLE_API_KEY", "YOUR_API_KEY_HERE")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "YOUR_API_KEY_HERE")
 INDERED_API_KEY = os.getenv("INDERED_API_KEY", "YOUR_API_KEY_HERE")
 GLASSDOOR_API_KEY = os.getenv("GLASSDOOR_API_KEY", "YOUR_API_KEY_HERE")
+JSEARCH_ENDPOINTS = [
+    endpoint.strip()
+    for endpoint in os.getenv("JSEARCH_ENDPOINTS", "/search-v2,/search").split(",")
+    if endpoint.strip()
+]
+INDEED_API_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "INDEED_API_HOSTS",
+        "indeed11.p.rapidapi.com,indeed12.p.rapidapi.com"
+    ).split(",")
+    if host.strip()
+]
+
+# Termo inicial da busca: mantém a experiência orientada à área de QA sem
+# impedir que o usuário refine a consulta por cargo ou tecnologia.
+DEFAULT_JOB_SEARCH_TERM = "Qualidade de Software QA Testes"
 
 # =============================================================================
 # Mapeamento completo de cidades brasileiras - Capitais e Principais Cidades
@@ -319,12 +336,12 @@ API_STATUS = {
     },
     "indeed": {
         "ativo": False,
-        "api_key_configurada": bool(os.getenv("INDERED_API_KEY", "") != "YOUR_API_KEY_HERE" and os.getenv("INDERED_API_KEY", "")),
+        "api_key_configurada": bool(os.getenv("RAPIDAPI_KEY", "") != "YOUR_API_KEY_HERE" and os.getenv("RAPIDAPI_KEY", "")),
         "nome": "Indeed",
         "versao": "v2",
         "ultima_verificacao": None,
         "ultimo_status": None,
-        "notas": "Configurar INDERED_API_KEY no .env",
+        "notas": "Usa RAPIDAPI_KEY e fallback Indeed11, Indeed12 e JSearch",
     },
     "glassdoor": {
         "ativo": False,

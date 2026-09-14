@@ -12,7 +12,7 @@ O VagaMatch analisa seu currículo, detecta seu nível de experiência (Júnior/
 |---------|-----------|
 | **Análise de currículo** | Extrai habilidades e experiência automaticamente de PDF, DOCX ou TXT |
 | **Detecção de nível** | Identifica se você é Júnior, Pleno ou Sênior baseado no currículo |
-| **Busca multi-fonte** | Google Jobs, Jooble, Indeed, Glassdoor e JSearch em uma busca só |
+| **Busca multi-fonte** | Google Jobs, Jooble, Indeed, Glassdoor e JSearch em uma busca só, direcionada a QA, qualidade e testes de software |
 | **Match por nível** | Prioriza vagas compatíveis com seu nível de experiência |
 | **Score de aderência** | Calcula % de compatibilidade (habilidades + nível + experiência) |
 | **Recomendações** | Sugere habilidades para melhorar seu perfil |
@@ -71,7 +71,7 @@ RAPIDAPI_KEY=sua_chave_rapidapi
 ## 📖 Como Usar
 
 1. **Upload do currículo** → Sistema detecta seu nível automaticamente
-2. **Configurar busca** → Cargo, região, modelo de trabalho, fontes
+2. **Configurar busca** → A busca começa em qualidade de software, QA e testes; refine por cargo, região, modelo de trabalho e fontes
 3. **Ver resultados** → Vagas classificadas por % de chance
 4. **Candidatar** → Clique no botão para abrir a vaga na fonte original
 

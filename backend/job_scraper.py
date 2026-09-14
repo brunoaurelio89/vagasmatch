@@ -9,9 +9,18 @@ import json
 import time
 from functools import lru_cache
 
+# Adicionado por conta do novo trecho _remover_acentos que é chamado pelo _normalizar_localizacao
+import unicodedata
+from typing import Optional
+
+# Adicionado para suprir a necessidade de outros localizadores Indeed, Jooble, Etc
+import re
+from typing import Tuple
+
 from config import (
     SERPAPI_KEY, JOOBLE_API_KEY, RAPIDAPI_KEY,
-    INDERED_API_KEY, GLASSDOOR_API_KEY, JOB_CACHE_MINUTES
+    INDERED_API_KEY, GLASSDOOR_API_KEY, JOB_CACHE_MINUTES,
+    INDEED_API_HOSTS, JSEARCH_ENDPOINTS
 )
 
 
@@ -56,39 +65,94 @@ def _traduzir_termo_busca(query: str) -> str:
     # Mapeamento de termos em inglês para português
     # Ordem importa: termos compostos primeiro
     traducoes = {
-        # Termos compostos (mais específicos primeiro)
-        "full stack developer": "desenvolvedor fullstack",
-        "backend developer": "desenvolvedor backend",
-        "frontend developer": "desenvolvedor frontend",
-        "data scientist": "cientista de dados",
-        "data engineer": "engenheiro de dados",
-        "software engineer": "engenheiro de software",
-        "devops engineer": "engenheiro devops",
-        "senior developer": "desenvolvedor sênior",
-        "junior developer": "desenvolvedor júnior",
-        "lead developer": "desenvolvedor líder",
-        "full stack": "fullstack",
-        "machine learning": "machine learning",
+        # -------------------------------------------------------------------------
+    # Termos compostos (mais específicos primeiro)
+    # -------------------------------------------------------------------------
+    # Engenharia e Automação
+    "software development engineer in test": "engenheiro de desenvolvimento de software em teste",
+    "qa automation engineer": "engenheiro de automação de qa",
+    "qa engineer": "engenheiro de qualidade de software",
+    "quality assurance engineer": "engenheiro de garantia da qualidade",
+    "test automation engineer": "engenheiro de automação de testes",
+    "software test engineer": "engenheiro de testes de software",
+    "performance test engineer": "engenheiro de testes de performance",
+    "security test engineer": "engenheiro de testes de segurança",
 
-        # Termos simples
-        "developer": "desenvolvedor",
-        "engineer": "engenheiro",
-        "analyst": "analista",
-        "manager": "gerente",
-        "senior": "sênior",
-        "junior": "júnior",
-        "lead": "líder",
-        "architect": "arquiteto",
-        "frontend": "frontend",
-        "backend": "backend",
-        "fullstack": "fullstack",
-        "devops": "devops",
-        "cloud": "nuvem",
+    # Analistas e Especialistas
+    "qa automation analyst": "analista de automação de qa",
+    "quality assurance analyst": "analista de garantia da qualidade",
+    "software test analyst": "analista de testes de software",
+    "quality analyst": "analista de qualidade",
+    "qa analyst": "analista de qa",
+    "test analyst": "analista de testes",
+
+    # Liderança e Gestão
+    "quality assurance manager": "gerente de garantia da qualidade",
+    "qa manager": "gerente de qa",
+    "qa lead": "líder de qa",
+    "test lead": "líder de testes",
+    "qa architect": "arquiteto de qa",
+
+    # Modalidades e Tipos de Teste
+    "manual tester": "testador manual",
+    "automation tester": "testador automatizado",
+    "manual testing": "testes manuais",
+    "automated testing": "testes automatizados",
+    "test automation": "automação de testes",
+    "quality control": "controle de qualidade",
+    "quality assurance": "garantia da qualidade",
+    "software testing": "testes de software",
+
+    # Níveis de Senioridade Combinados
+    "senior qa engineer": "engenheiro de qa sênior",
+    "junior qa engineer": "engenheiro de qa júnior",
+    "senior qa analyst": "analista de qa sênior",
+    "junior qa analyst": "analista de qa júnior",
+
+    # Siglas Técnicas Frequentes
+    "sdet": "sdet",  # Frequentemente mantido como SDET no mercado brasileiro
+
+    # -------------------------------------------------------------------------
+    # Termos simples
+    # -------------------------------------------------------------------------
+    "qa": "qa",
+    "sdet": "sdet",
+    "tester": "testador",
+    "testing": "testes",
+    "test": "teste",
+    "quality": "qualidade",
+    "assurance": "garantia",
     }
 
     # Verificar se o termo já está em português
     # Apenas palavras inequivocamente em português (não "frontend"/"backend" que são iguais)
-    palavras_portugues = ["desenvolvedor", "analista", "programador", "engenheiro", "cientista", "pleno"]
+    palavras_portugues = [
+        # Níveis e Senioridade (incluindo variações com acento)
+    "júnior", "junior", "pleno", "sênior", "senior", "estagiário", "estagiario", 
+    "trainee", "líder", "lider", "coordenador", "gerente", "diretor",
+
+    # Engenharia e Desenvolvimento Geral
+    "desenvolvedor", "desenvolvedora", "programador", "programadora",
+    "engenheiro", "engenheira", "analista", "cientista", "arquitetado", "arquiteta",
+
+    # Área de QA, Qualidade e Testes (Novas adições)
+    "testador", "testadora",
+    "testes", "teste",
+    "qualidade",
+    "automação", "automacao",
+    "garantia",
+    "segurança", "seguranca",
+    "desempenho",
+
+    # Outros papéis e áreas correlatas
+    "agilista",
+    "especialista",
+    "consultor", "consultora",
+    "arquitetura",
+    "sistemas",
+    "dados",
+    "negócios", "negocios"
+    ]
     for palavra in palavras_portugues:
         if palavra in query_lower:
             return query  # Já está em português
@@ -106,6 +170,33 @@ def _traduzir_termo_busca(query: str) -> str:
     return query
 
 
+def _gerar_queries_qualidade(query: str) -> List[str]:
+    """Mantém buscas genéricas dentro da área de QA e testes de software."""
+    query_limpa = query.strip()
+    query_lower = query_limpa.lower()
+    termos_da_area = (
+        "qa",
+        "quality",
+        "qualidade",
+        "test",
+        "teste",
+        "sdet",
+        "software testing",
+        "quality assurance",
+        "automação de testes",
+        "automacao de testes",
+    )
+
+    if any(termo in query_lower for termo in termos_da_area):
+        return [query_limpa]
+
+    return [
+        f"{query_limpa} QA",
+        f"{query_limpa} testes de software",
+        f"{query_limpa} qualidade de software",
+    ]
+
+
 # ========== NORMALIZAÇÃO DE LOCALIZAÇÃO ==========
 
 # Mapeamento completo de estados brasileiros
@@ -121,57 +212,251 @@ ESTADOS_BRASIL = {
 
 # Cidades brasileiras principais para mapeamento direto
 PRINCIPAIS_CIDADES = {
-    # São Paulo
-    "araraquara": "Araraquara, São Paulo, Brazil",
+    # São Paulo (Aumentado: Polos de TI, Vale do Paraíba e Região Metropolitana)
+    "sao paulo": "São Paulo, São Paulo, Brazil",
+    "são paulo": "São Paulo, São Paulo, Brazil",
     "campinas": "Campinas, São Paulo, Brazil",
-    "santos": "Santos, São Paulo, Brazil",
+    "sao carlos": "São Carlos, São Paulo, Brazil",  # Forte polo de tecnologia/universidades
+    "são carlos": "São Carlos, São Paulo, Brazil",
+    "sao jose dos campos": "São José dos Campos, São Paulo, Brazil",
     "são josé dos campos": "São José dos Campos, São Paulo, Brazil",
+    "barueri": "Barueri, São Paulo, Brazil",  # Alphaville (Sede de diversas consultorias e multinacionais)
+    "alphaville": "Barueri, São Paulo, Brazil",
+    "santo andre": "Santo André, São Paulo, Brazil",
+    "santo constraints": "Santo André, São Paulo, Brazil",
+    "sao bernardo do campo": "São Bernardo do Campo, São Paulo, Brazil",
+    "são bernardo do campo": "São Bernardo do Campo, São Paulo, Brazil",
+    "sao caetano do sul": "São Caetano do Sul, São Paulo, Brazil",
+    "são caetano do sul": "São Caetano do Sul, São Paulo, Brazil",
+    "osasco": "Osasco, São Paulo, Brazil",  # Grandes hubs como Mercado Livre, Bradesco
+    "jundiai": "Jundiaí, São Paulo, Brazil",
+    "jundiaí": "Jundiaí, São Paulo, Brazil",
+    "araraquara": "Araraquara, São Paulo, Brazil",
+    "santos": "Santos, São Paulo, Brazil",
+    "ribeirao preto": "Ribeirão Preto, São Paulo, Brazil",
     "ribeirão preto": "Ribeirão Preto, São Paulo, Brazil",
     "sorocaba": "Sorocaba, São Paulo, Brazil",
     "bauru": "Bauru, São Paulo, Brazil",
     "mogi mirim": "Mogi Mirim, São Paulo, Brazil",
     "limeira": "Limeira, São Paulo, Brazil",
     "piracicaba": "Piracicaba, São Paulo, Brazil",
-    " São paulo": "São Paulo, São Paulo, Brazil",
+    "franca": "Franca, São Paulo, Brazil",
+    "presidente prudente": "Presidente Prudente, São Paulo, Brazil",
+
+    # Santa Catarina (Aumentado: Polo fortíssimo de tecnologia/software)
+    "florianopolis": "Florianópolis, Santa Catarina, Brazil",
+    "florianópolis": "Florianópolis, Santa Catarina, Brazil",
+    "joinville": "Joinville, Santa Catarina, Brazil",
+    "blumenau": "Blumenau, Santa Catarina, Brazil",  # Fortíssimo polo de TI/Software
+    "itajai": "Itajaí, Santa Catarina, Brazil",
+    "itajaí": "Itajaí, Santa Catarina, Brazil",
+    "balneario camboriu": "Balneário Camboriú, Santa Catarina, Brazil",
+    "balneário camboriú": "Balneário Camboriú, Santa Catarina, Brazil",
+    "chapecó": "Chapecó, Santa Catarina, Brazil",
+    "chapeco": "Chapecó, Santa Catarina, Brazil",
+    "criciuma": "Criciúma, Santa Catarina, Brazil",
+    "criciúma": "Criciúma, Santa Catarina, Brazil",
+
+    # Paraná (Aumentado: Hubs de inovação)
+    "curitiba": "Curitiba, Paraná, Brazil",
+    "londrina": "Londrina, Paraná, Brazil",
+    "maringa": "Maringá, Paraná, Brazil",
+    "maringá": "Maringá, Paraná, Brazil",
+    "ponta grossa": "Ponta Grossa, Paraná, Brazil",
+    "cascavel": "Cascavel, Paraná, Brazil",
+    "foz do iguacu": "Foz do Iguaçu, Paraná, Brazil",
+    "foz do iguaçu": "Foz do Iguaçu, Paraná, Brazil",
+
+    # Rio Grande do Sul (Aumentado: Tecnopuc, Tecnosinos e ecossistema tech)
+    "porto alegre": "Porto Alegre, Rio Grande do Sul, Brazil",
+    "caxias do sul": "Caxias do Sul, Rio Grande do Sul, Brazil",
+    "sao leopoldo": "São Leopoldo, Rio Grande do Sul, Brazil",  # Tecnosinos (Hub imenso de consultorias)
+    "são leopoldo": "São Leopoldo, Rio Grande do Sul, Brazil",
+    "canoas": "Canoas, Rio Grande do Sul, Brazil",
+    "pelotas": "Pelotas, Rio Grande do Sul, Brazil",
+    "passo fundo": "Passo Fundo, Rio Grande do Sul, Brazil",
+    "santa maria": "Santa Maria, Rio Grande do Sul, Brazil",
+
     # Rio de Janeiro
     "rio de janeiro": "Rio de Janeiro, Rio de Janeiro, Brazil",
+    "niteroi": "Niterói, Rio de Janeiro, Brazil",
     "niterói": "Niterói, Rio de Janeiro, Brazil",
+    "petropolis": "Petrópolis, Rio de Janeiro, Brazil",  # Serratec (Polo de Tecnologia)
+    "petrópolis": "Petrópolis, Rio de Janeiro, Brazil",
     "duque de caxias": "Duque de Caxias, Rio de Janeiro, Brazil",
     "nova iguaçu": "Nova Iguaçu, Rio de Janeiro, Brazil",
-    # Minas Gerais
+    "nova iguacu": "Nova Iguaçu, Rio de Janeiro, Brazil",
+    "macae": "Macaé, Rio de Janeiro, Brazil",
+
+    # Minas Gerais (Aumentado: San Pedro Valley e polos de outsourcing)
     "belo horizonte": "Belo Horizonte, Minas Gerais, Brazil",
+    "uberlandia": "Uberlândia, Minas Gerais, Brazil",
     "uberlândia": "Uberlândia, Minas Gerais, Brazil",
+    "santa rita do sapucai": "Santa Rita do Sapucaí, Minas Gerais, Brazil",  # Vale da Eletrônica
+    "santa rita do sapucaí": "Santa Rita do Sapucaí, Minas Gerais, Brazil",
     "contagem": "Contagem, Minas Gerais, Brazil",
     "juiz de fora": "Juiz de Fora, Minas Gerais, Brazil",
     "betim": "Betim, Minas Gerais, Brazil",
+    "montes claros": "Montes Claros, Minas Gerais, Brazil",
+    "uberaba": "Uberaba, Minas Gerais, Brazil",
+
+    # Pernambuco (Aumentado: Porto Digital - um dos maiores polos de software do Brasil)
+    "recife": "Recife, Pernambuco, Brazil",
+    "caruaru": "Caruaru, Pernambuco, Brazil",
+    "jaboatao dos guararapes": "Jaboatão dos Guararapes, Pernambuco, Brazil",
+    "jaboatão dos guararapes": "Jaboatão dos Guararapes, Pernambuco, Brazil",
+
+    # Ceará
+    "fortaleza": "Fortaleza, Ceará, Brazil",
+    "sobral": "Sobral, Ceará, Brazil",
+
     # Bahia
     "salvador": "Salvador, Bahia, Brazil",
     "feira de santana": "Feira de Santana, Bahia, Brazil",
     "vitoria da conquista": "Vitória da Conquista, Bahia, Brazil",
-    # Paraná
-    "curitiba": "Curitiba, Paraná, Brazil",
-    "londrina": "Londrina, Paraná, Brazil",
-    "maringá": "Maringá, Paraná, Brazil",
-    # Rio Grande do Sul
-    "porto alegre": "Porto Alegre, Rio Grande do Sul, Brazil",
-    "caxias do sul": "Caxias do Sul, Rio Grande do Sul, Brazil",
-    "pelotas": "Pelotas, Rio Grande do Sul, Brazil",
-    # Pernambuco
-    "recife": "Recife, Pernambuco, Brazil",
-    "jaboatão dos guararapes": "Jaboatão dos Guararapes, Pernambuco, Brazil",
-    # Ceará
-    "fortaleza": "Fortaleza, Ceará, Brazil",
-    # Distrito Federal
+    "vitória da conquista": "Vitória da Conquista, Bahia, Brazil",
+    "ilheus": "Ilhéus, Bahia, Brazil",
+
+    # Distrito Federal & Goiás
+    "brasilia": "Brasília, Distrito Federal, Brazil",
     "brasília": "Brasília, Distrito Federal, Brazil",
-    # Goiás
+    "goiania": "Goiânia, Goiás, Brazil",
     "goiânia": "Goiânia, Goiás, Brazil",
-    # Santa Catarina
-    "florianópolis": "Florianópolis, Santa Catarina, Brazil",
-    "joinville": "Joinville, Santa Catarina, Brazil",
-    # Amazonas
+    "anapolis": "Anápolis, Goiás, Brazil",
+
+    # Espírito Santo
+    "vitoria": "Vitória, Espírito Santo, Brazil",
+    "vitória": "Vitória, Espírito Santo, Brazil",
+    "vila velha": "Vila Velha, Espírito Santo, Brazil",
+    "serra": "Serra, Espírito Santo, Brazil",
+
+    # Paraíba & Rio Grande do Norte (Hubs de tecnologia e universidades do Nordeste)
+    "joao pessoa": "João Pessoa, Paraíba, Brazil",
+    "joão pessoa": "João Pessoa, Paraíba, Brazil",
+    "campina grande": "Campina Grande, Paraíba, Brazil",  # Forte polo de computação
+    "natal": "Natal, Rio Grande do Norte, Brazil",
+
+    # Outras capitais com forte presença de consultorias e empresas públicas/privadas
     "manaus": "Manaus, Amazonas, Brazil",
+    "belem": "Belém, Pará, Brazil",
+    "belém": "Belém, Pará, Brazil",
+    "cuiaba": "Cuiabá, Mato Grosso, Brazil",
+    "cuiabá": "Cuiabá, Mato Grosso, Brazil",
+    "campo grande": "Campo Grande, Mato Grosso do Sul, Brazil",
+    "maceio": "Maceió, Alagoas, Brazil",
+    "maceió": "Maceió, Alagoas, Brazil",
+    "aracaju": "Aracaju, Sergipe, Brazil",
+    "teresina": "Teresina, Piauí, Brazil",
+    "sao luis": "São Luís, Maranhão, Brazil",
+    "são luís": "São Luís, Maranhão, Brazil",
 }
 
+
+# def _normalizar_localizacao(location: str) -> Optional[str]:
+#     """
+#     Normaliza a localização informada para formato válido do SerpAPI.
+#     Suporta formatos: "Brasil", "São Paulo", "SP", "Araraquara-SP", "Remote", etc.
+#     Retorna None se não for possível mapear.
+#     """
+#     if not location:
+#         return None
+
+#     loc_raw = location.strip()
+#     loc_lower = loc_raw.lower()
+
+#     # Mapeamento de estados -> nome no SerpAPI
+#     estados = {
+#         "sp": "São Paulo",
+#         "rj": "Rio de Janeiro",
+#         "mg": "Minas Gerais",
+#         "rs": "Rio Grande do Sul",
+#         "ba": "Bahia",
+#         "df": "Distrito Federal",
+#         "pe": "Pernambuco",
+#         "pr": "Paraná",
+#         "sc": "Santa Catarina",
+#         "ce": "Ceará",
+#         "am": "Amazonas",
+#         "ms": "Mato Grosso do Sul",
+#         "go": "Goiás",
+#         "es": "Espírito Santo",
+#         "pb": "Paraíba",
+#         "rn": "Rio Grande do Norte",
+#         "mt": "Mato Grosso",
+#         "ma": "Maranhão",
+#         "pa": "Pará",
+#     }
+
+#     # Países
+#     if loc_lower in ("brasil", "br", "brazil"):
+#         return "Brazil"
+#     # Para o SerpAPI, "Remote" nao funciona como location.
+#     # Devolvemos "Brazil" e a busca sera feita com todo o territorio;
+#     # o filtro por modelo de trabalho sera aplicado depois.
+#     if loc_lower in ("remote", "remoto"):
+#         return "Brazil"
+
+#     # Formato "Cidade-Estado" (ex: "Araraquara-SP", "Sao Paulo-SP", "São Paulo-SP")
+#     if "-" in loc_raw:
+#         # Separar cidade e estado
+#         city_part, state_part = loc_raw.rsplit("-", 1)
+#         city = city_part.strip()
+#         state = state_part.strip().lower().replace(".", "")
+
+#         # Normalizar cidade (remover acentos e espaços) para busca no mapeamento
+#         city_norm = city.lower().replace("ã", "a").replace("é", "e").replace("í", "i").replace("õ", "o").replace("ú", "u").replace("ç", "c")
+#         city_norm = city_norm.replace(" ", "")
+
+#         # Verificar se a cidade está no mapeamento de cidades conhecidas
+#         for key, value in PRINCIPAIS_CIDADES.items():
+#             key_norm = key.lower().replace("ã", "a").replace("é", "e").replace("í", "i").replace("õ", "o").replace("ú", "u").replace("ç", "c")
+#             key_norm = key_norm.replace(" ", "")
+#             if key_norm == city_norm:
+#                 return value
+
+#         # Se for sigla de estado, transformar para nome completo
+#         state_name = ESTADOS_BRASIL.get(state, state)
+
+#         # Capitalizar primeira letra da cidade
+#         if city:
+#             city = city[0].upper() + city[1:].lower()
+
+#         return f"{city}, {state_name}, Brazil"
+
+#     # Verificar se é uma cidade principal conhecida
+#     if loc_lower in PRINCIPAIS_CIDADES:
+#         return PRINCIPAIS_CIDADES[loc_lower]
+
+#     # Verificar se é apenas um estado
+#     if loc_lower in ESTADOS_BRASIL:
+#         return f"{ESTADOS_BRASIL[loc_lower]}, {ESTADOS_BRASIL[loc_lower]}, Brazil"
+
+#     # Cidades/estados conhecidos (fallback)
+#     cidades = {
+#         "sao paulo": "São Paulo, São Paulo, Brazil",
+#         "são paulo": "São Paulo, São Paulo, Brazil",
+#         "sp": "São Paulo, São Paulo, Brazil",
+#         "rio de janeiro": "Rio de Janeiro, Rio de Janeiro, Brazil",
+#         "rj": "Rio de Janeiro, Rio de Janeiro, Brazil",
+#         "belo horizonte": "Belo Horizonte, Minas Gerais, Brazil",
+#         "bh": "Belo Horizonte, Minas Gerais, Brazil",
+#         "porto alegre": "Porto Alegre, Rio Grande do Sul, Brazil",
+#         "salvador": "Salvador, Bahia, Brazil",
+#         "brasilia": "Brasília, Distrito Federal, Brazil",
+#         "recife": "Recife, Pernambuco, Brazil",
+#         "curitiba": "Curitiba, Paraná, Brazil",
+#         "florianopolis": "Florianópolis, Santa Catarina, Brazil",
+#         "fortaleza": "Fortaleza, Ceará, Brazil",
+#         "manaus": "Manaus, Amazonas, Brazil",
+#         "campo grande": "Campo Grande, Mato Grosso do Sul, Brazil",
+#     }
+
+#     return cidades.get(loc_lower)
+
+def _remover_acentos(texto: str) -> str:
+    """Remove acentos e pontuações de uma string."""
+    nfkd = unicodedata.normalize('NFD', texto)
+    return "".join([c for c in nfkd if not unicodedata.combining(c)])
 
 def _normalizar_localizacao(location: str) -> Optional[str]:
     """
@@ -185,142 +470,108 @@ def _normalizar_localizacao(location: str) -> Optional[str]:
     loc_raw = location.strip()
     loc_lower = loc_raw.lower()
 
-    # Mapeamento de estados -> nome no SerpAPI
-    estados = {
-        "sp": "São Paulo",
-        "rj": "Rio de Janeiro",
-        "mg": "Minas Gerais",
-        "rs": "Rio Grande do Sul",
-        "ba": "Bahia",
-        "df": "Distrito Federal",
-        "pe": "Pernambuco",
-        "pr": "Paraná",
-        "sc": "Santa Catarina",
-        "ce": "Ceará",
-        "am": "Amazonas",
-        "ms": "Mato Grosso do Sul",
-        "go": "Goiás",
-        "es": "Espírito Santo",
-        "pb": "Paraíba",
-        "rn": "Rio Grande do Norte",
-        "mt": "Mato Grosso",
-        "ma": "Maranhão",
-        "pa": "Pará",
+    # Mapeamento de siglas de estados para o nome completo reconhecido pelo SerpAPI
+    ESTADOS_BRASIL = {
+        "sp": "São Paulo", "rj": "Rio de Janeiro", "mg": "Minas Gerais",
+        "rs": "Rio Grande do Sul", "ba": "Bahia", "df": "Distrito Federal",
+        "pe": "Pernambuco", "pr": "Paraná", "sc": "Santa Catarina",
+        "ce": "Ceará", "am": "Amazonas", "ms": "Mato Grosso do Sul",
+        "go": "Goiás", "es": "Espírito Santo", "pb": "Paraíba",
+        "rn": "Rio Grande do Norte", "mt": "Mato Grosso", "ma": "Maranhão",
+        "pa": "Pará", "al": "Alagoas", "se": "Sergipe", "pi": "Piauí"
     }
 
-    # Países
-    if loc_lower in ("brasil", "br", "brazil"):
-        return "Brazil"
-    # Para o SerpAPI, "Remote" nao funciona como location.
-    # Devolvemos "Brazil" e a busca sera feita com todo o territorio;
-    # o filtro por modelo de trabalho sera aplicado depois.
-    if loc_lower in ("remote", "remoto"):
+    # 1. Checagem de País e Remoto
+    if loc_lower in ("brasil", "br", "brazil", "remote", "remoto", "home office"):
         return "Brazil"
 
-    # Formato "Cidade-Estado" (ex: "Araraquara-SP", "Sao Paulo-SP", "São Paulo-SP")
+    # 2. Formato "Cidade-Estado" (ex: "Araraquara-SP", "Sao Paulo - SP")
     if "-" in loc_raw:
-        # Separar cidade e estado
         city_part, state_part = loc_raw.rsplit("-", 1)
         city = city_part.strip()
-        state = state_part.strip().lower().replace(".", "")
+        state_sigla = state_part.strip().lower().replace(".", "")
 
-        # Normalizar cidade (remover acentos e espaços) para busca no mapeamento
-        city_norm = city.lower().replace("ã", "a").replace("é", "e").replace("í", "i").replace("õ", "o").replace("ú", "u").replace("ç", "c")
-        city_norm = city_norm.replace(" ", "")
+        # Normalização total para busca eficiente (sem acentos e sem espaços)
+        city_norm = _remover_acentos(city.lower()).replace(" ", "")
 
-        # Verificar se a cidade está no mapeamento de cidades conhecidas
+        # Busca no dicionário de cidades conhecidas
         for key, value in PRINCIPAIS_CIDADES.items():
-            key_norm = key.lower().replace("ã", "a").replace("é", "e").replace("í", "i").replace("õ", "o").replace("ú", "u").replace("ç", "c")
-            key_norm = key_norm.replace(" ", "")
+            key_norm = _remover_acentos(key.lower()).replace(" ", "")
             if key_norm == city_norm:
                 return value
 
-        # Se for sigla de estado, transformar para nome completo
-        state_name = ESTADOS_BRASIL.get(state, state)
+        # Resolução do estado caso a cidade não esteja no dicionário principal
+        state_name = ESTADOS_BRASIL.get(state_sigla, state_sigla.upper())
 
-        # Capitalizar primeira letra da cidade
-        if city:
-            city = city[0].upper() + city[1:].lower()
+        # Capitalização correta de palavras (ex: "são josé dos campos" -> "São José Dos Campos")
+        city_formatted = " ".join(word.capitalize() for word in city.split())
 
-        return f"{city}, {state_name}, Brazil"
+        return f"{city_formatted}, {state_name}, Brazil"
 
-    # Verificar se é uma cidade principal conhecida
+    # 3. Verificar se é uma cidade conhecida diretamente pelo nome
     if loc_lower in PRINCIPAIS_CIDADES:
         return PRINCIPAIS_CIDADES[loc_lower]
 
-    # Verificar se é apenas um estado
+    # 4. Verificar se a entrada é apenas a sigla ou nome do estado
     if loc_lower in ESTADOS_BRASIL:
-        return f"{ESTADOS_BRASIL[loc_lower]}, {ESTADOS_BRASIL[loc_lower]}, Brazil"
+        nome_estado = ESTADOS_BRASIL[loc_lower]
+        return f"{nome_estado}, {nome_estado}, Brazil"
 
-    # Cidades/estados conhecidos (fallback)
-    cidades = {
-        "sao paulo": "São Paulo, São Paulo, Brazil",
-        "são paulo": "São Paulo, São Paulo, Brazil",
-        "sp": "São Paulo, São Paulo, Brazil",
-        "rio de janeiro": "Rio de Janeiro, Rio de Janeiro, Brazil",
-        "rj": "Rio de Janeiro, Rio de Janeiro, Brazil",
-        "belo horizonte": "Belo Horizonte, Minas Gerais, Brazil",
-        "bh": "Belo Horizonte, Minas Gerais, Brazil",
-        "porto alegre": "Porto Alegre, Rio Grande do Sul, Brazil",
-        "salvador": "Salvador, Bahia, Brazil",
-        "brasilia": "Brasília, Distrito Federal, Brazil",
-        "recife": "Recife, Pernambuco, Brazil",
-        "curitiba": "Curitiba, Paraná, Brazil",
-        "florianopolis": "Florianópolis, Santa Catarina, Brazil",
-        "fortaleza": "Fortaleza, Ceará, Brazil",
-        "manaus": "Manaus, Amazonas, Brazil",
-        "campo grande": "Campo Grande, Mato Grosso do Sul, Brazil",
-    }
+    # 5. Fallback para busca flexível sem acento em PRINCIPAIS_CIDADES
+    loc_clean = _remover_acentos(loc_lower)
+    for key, value in PRINCIPAIS_CIDADES.items():
+        if _remover_acentos(key) == loc_clean:
+            return value
 
-    return cidades.get(loc_lower)
+    return None
 
 
-def _normalizar_localizacao_jooble(location: str) -> str:
-    """Normaliza localização para formato Jooble (cidade, país)."""
-    if not location or location.lower() in ("brasil", "br", ""):
-        return "Brazil"
-    if location.lower() in ("remote", "remoto"):
-        return "Remote"
+# def _normalizar_localizacao_jooble(location: str) -> str:
+#     """Normaliza localização para formato Jooble (cidade, país)."""
+#     if not location or location.lower() in ("brasil", "br", ""):
+#         return "Brazil"
+#     if location.lower() in ("remote", "remoto"):
+#         return "Remote"
 
-    # Formato "Cidade-Estado"
-    if "-" in location:
-        city_part, state_part = location.rsplit("-", 1)
-        return f"{city_part.strip()}, Brazil"
+#     # Formato "Cidade-Estado"
+#     if "-" in location:
+#         city_part, state_part = location.rsplit("-", 1)
+#         return f"{city_part.strip()}, Brazil"
 
-    return f"{location.strip()}, Brazil"
-
-
-def _normalizar_localizacao_indeed(location: str) -> str:
-    """Normaliza localização para formato Indeed (cidade, estado)."""
-    if not location or location.lower() in ("brasil", "br", ""):
-        return "Brazil"
-    if location.lower() in ("remote", "remoto"):
-        return "Remote"
-
-    # Formato "Cidade-Estado"
-    if "-" in location:
-        city_part, state_part = location.rsplit("-", 1)
-        return f"{city_part.strip()}, {state_part.strip()}"
-
-    return location.strip()
+#     return f"{location.strip()}, Brazil"
 
 
-def _normalizar_localizacao_glassdoor(location: str) -> str:
-    """Normaliza localização para formato Glassdoor (cidade)."""
-    if not location or location.lower() in ("brasil", "br", ""):
-        return "Brazil"
-    if location.lower() in ("remote", "remoto"):
-        return "Remote"
+# def _normalizar_localizacao_indeed(location: str) -> str:
+#     """Normaliza localização para formato Indeed (cidade, estado)."""
+#     if not location or location.lower() in ("brasil", "br", ""):
+#         return "Brazil"
+#     if location.lower() in ("remote", "remoto"):
+#         return "Remote"
 
-    # Formato "Cidade-Estado"
-    if "-" in location:
-        city_part, state_part = location.rsplit("-", 1)
-        return city_part.strip()
+#     # Formato "Cidade-Estado"
+#     if "-" in location:
+#         city_part, state_part = location.rsplit("-", 1)
+#         return f"{city_part.strip()}, {state_part.strip()}"
 
-    return location.strip()
+#     return location.strip()
 
 
-def _normalizar_localizacao_jsearch(location: str) -> str:
+# def _normalizar_localizacao_glassdoor(location: str) -> str:
+#     """Normaliza localização para formato Glassdoor (cidade)."""
+#     if not location or location.lower() in ("brasil", "br", ""):
+#         return "Brazil"
+#     if location.lower() in ("remote", "remoto"):
+#         return "Remote"
+
+#     # Formato "Cidade-Estado"
+#     if "-" in location:
+#         city_part, state_part = location.rsplit("-", 1)
+#         return city_part.strip()
+
+#     return location.strip()
+
+
+# def _normalizar_localizacao_jsearch(location: str) -> str:
     """Normaliza localização para formato JSearch (cidade, país)."""
     if not location or location.lower() in ("brasil", "br", ""):
         return "Brazil"
@@ -334,6 +585,57 @@ def _normalizar_localizacao_jsearch(location: str) -> str:
 
     return location.strip()
 
+
+
+
+def _extrair_cidade_e_estado(location: str) -> Tuple[str, str]:
+    """Auxiliar para separar 'Cidade - UF' ou 'Cidade, UF'."""
+    loc_clean = location.strip()
+    # Separa por hífen ou vírgula da direita para a esquerda
+    partes = re.split(r'[-,-]', loc_clean)
+    if len(partes) > 1:
+        cidade = partes[0].strip()
+        estado = partes[-1].strip()
+        return cidade, estado
+    return loc_clean, ""
+
+
+def _normalizar_localizacao_jooble(location: str) -> str:
+    """Normaliza localização para formato Jooble (Cidade, Brazil ou Brazil)."""
+    if not location or location.lower() in ("brasil", "br", "remote", "remoto", "home office", ""):
+        return "Brazil"
+
+    cidade, _ = _extrair_cidade_e_estado(location)
+    return f"{cidade}, Brazil"
+
+
+def _normalizar_localizacao_indeed(location: str) -> str:
+    """Normaliza localização para formato Indeed (Cidade, UF ou Brazil)."""
+    if not location or location.lower() in ("brasil", "br", "remote", "remoto", "home office", ""):
+        return "Brazil"
+
+    cidade, estado = _extrair_cidade_e_estado(location)
+    if estado:
+        return f"{cidade}, {estado.upper()}"
+    return cidade
+
+
+def _normalizar_localizacao_glassdoor(location: str) -> str:
+    """Normaliza localização para formato Glassdoor (apenas Cidade ou Brazil)."""
+    if not location or location.lower() in ("brasil", "br", "remote", "remoto", "home office", ""):
+        return "Brazil"
+
+    cidade, _ = _extrair_cidade_e_estado(location)
+    return cidade
+
+
+def _normalizar_localizacao_jsearch(location: str) -> str:
+    """Normaliza localização para formato JSearch (sempre 'Cidade, Brazil')."""
+    if not location or location.lower() in ("brasil", "br", "remote", "remoto", "home office", ""):
+        return "Brazil"
+
+    cidade, _ = _extrair_cidade_e_estado(location)
+    return f"{cidade}, Brazil"
 
 def _filtrar_apenas_cidade(vagas: List[Dict], localizacao_usuario: str) -> List[Dict]:
     """
@@ -592,11 +894,13 @@ def buscar_vagas_google_jobs(
                 "gl": "br",
                 "api_key": SERPAPI_KEY,
                 "page": pagina,
-                "sort": "v"
+                "sort": "date"
             }
 
             try:
-                response = requests.get(url, params=params, timeout=30)
+                
+                response = requests.get(url, params=params, timeout=(5, 20))
+                response.raise_for_status()
                 data = response.json()
 
                 if data.get("error"):
@@ -641,11 +945,14 @@ def buscar_vagas_google_jobs(
                 if novos < 3:
                     break
 
+            except requests.Timeout:
+                print(f"[ERRO][Google Jobs] Tempo limite excedido para '{loc}'. A fonte não respondeu a tempo.")
+                break
             except requests.RequestException as e:
-                print(f"[ERRO] Falha na requisição ({loc}): {e}")
+                print(f"[ERRO][Google Jobs] Falha ao consultar '{loc}': {e}")
                 break
             except Exception as e:
-                print(f"[ERRO] Erro inesperado ({loc}): {e}")
+                print(f"[ERRO][Google Jobs] Erro ao processar a resposta de '{loc}': {e}")
                 break
 
     # Filtrar por região se não for "Brasil" ou "Remote"
@@ -678,7 +985,7 @@ def buscar_vagas_jooble(
     API pública gratuita, requer apenas um api_key.
     """
     if not JOOBLE_API_KEY or JOOBLE_API_KEY == "YOUR_API_KEY_HERE":
-        print("[AVISO] Jooble API key não configurada")
+        print("[AVISO][Jooble] API key não configurada; fonte ignorada.")
         return []
 
     url = f"https://jooble.org/api/{JOOBLE_API_KEY}"
@@ -697,11 +1004,12 @@ def buscar_vagas_jooble(
     }
 
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response = requests.post(url, json=payload, headers=headers, timeout=(5, 20))
+        response.raise_for_status()
         data = response.json()
 
         if data.get("error"):
-            print(f"[AVISO] Jooble: {data['error']}")
+            print(f"[ERRO][Jooble] API retornou erro: {data['error']}")
             return []
 
         vagas = []
@@ -724,13 +1032,13 @@ def buscar_vagas_jooble(
         return vagas
 
     except requests.RequestException as e:
-        print(f"[ERRO] Falha na requisição Jooble: {e}")
+        print(f"[ERRO][Jooble] Falha ao consultar a API: {e}")
         return []
     except json.JSONDecodeError as e:
-        print(f"[ERRO] Resposta JSON inválida Jooble: {e}")
+        print(f"[ERRO][Jooble] Resposta inválida (não é JSON): {e}")
         return []
     except Exception as e:
-        print(f"[ERRO] Erro inesperado Jooble: {e}")
+        print(f"[ERRO][Jooble] Erro ao processar a resposta: {e}")
         return []
 
 
@@ -747,62 +1055,102 @@ def buscar_vagas_indeed(
     Requer RAPIDAPI_KEY configurado no .env
     """
     if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_API_KEY_HERE":
-        print("[AVISO] RapidAPI key não configurada (necessária para Indeed)")
+        print("[AVISO][Indeed] RapidAPI key não configurada; fonte ignorada.")
         return []
 
-    url = "https://indeed11.p.rapidapi.com/search"
-
-    # Normalizar localização para formato Indeed
     location_indeed = _normalizar_localizacao_indeed(location)
+    for host in INDEED_API_HOSTS:
+        try:
+            vagas = _buscar_indeed_rapidapi(
+                host, query, location_indeed, page, max_results
+            )
+            if vagas:
+                print(f"[INFO][Indeed] Fonte {host} retornou {len(vagas)} vagas brasileiras.")
+                return vagas
+            print(f"[AVISO][Indeed] Fonte {host} não retornou vagas; tentando a próxima.")
+        except requests.HTTPError as error:
+            status_code = error.response.status_code if error.response is not None else None
+            print(f"[AVISO][Indeed] Fonte {host} recusou a consulta ({status_code}); tentando a próxima.")
+        except requests.RequestException as error:
+            print(f"[AVISO][Indeed] Fonte {host} indisponível: {error}; tentando a próxima.")
+        except (ValueError, TypeError) as error:
+            print(f"[AVISO][Indeed] Resposta inválida da fonte {host}: {error}; tentando a próxima.")
 
-    querystring = {
+    # Último fallback: JSearch, limitado a publicações cujo link/provedor seja Indeed.
+    return _buscar_indeed_via_jsearch(query, location, page, max_results)
+
+
+def _buscar_indeed_rapidapi(
+    host: str,
+    query: str,
+    location: str,
+    page: int,
+    max_results: int
+) -> List[Dict]:
+    """Consulta uma implementação compatível com Indeed hospedada na RapidAPI."""
+    url = f"https://{host}/search"
+    params = {
         "query": query,
-        "location": location_indeed,
-        "page_id": str(page),
-        "locality": "pt_BR"
+        "location": location,
+        "page_id": str(max(page, 1)),
+        "locality": "pt_BR",
+        "country": "br",
     }
-
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "indeed11.p.rapidapi.com"
+        "X-RapidAPI-Host": host,
     }
+    response = requests.get(url, headers=headers, params=params, timeout=(5, 20))
+    response.raise_for_status()
+    payload = response.json()
+    jobs = payload.get("jobs", []) if isinstance(payload, dict) else []
+    vagas = []
 
-    try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=30)
-        data = response.json()
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        location_job = job.get("location", "")
+        if not _localizacao_brasileira(location_job):
+            continue
+        link = job.get("url", job.get("job_url", ""))
+        vagas.append({
+            "title": job.get("title", job.get("job_title", "")),
+            "company": job.get("company_name", job.get("employer_name", "")),
+            "location": location_job,
+            "description": job.get("description", ""),
+            "link": link,
+            "posted_date": job.get("posted_time", job.get("job_posted_at", "")),
+            "source": "Indeed",
+            "apply_link": link,
+            "tags": _extrair_tags({"description": job.get("description", "")})
+        })
+        if len(vagas) >= max_results:
+            break
+    return vagas
 
-        if data.get("error"):
-            print(f"[AVISO] Indeed: {data['error']}")
-            return []
 
-        vagas = []
-        for job in data.get("jobs", []):
-            vaga = {
-                "title": job.get("title", ""),
-                "company": job.get("company_name", ""),
-                "location": job.get("location", ""),
-                "description": job.get("description", ""),
-                "link": job.get("url", ""),
-                "posted_date": job.get("posted_time", ""),
-                "source": "Indeed",
-                "apply_link": job.get("url", ""),
-                "tags": _extrair_tags({"description": job.get("description", "")})
-            }
-            vagas.append(vaga)
-            if len(vagas) >= max_results:
-                break
-
-        return vagas
-
-    except requests.RequestException as e:
-        print(f"[ERRO] Falha na requisição Indeed: {e}")
-        return []
-    except json.JSONDecodeError as e:
-        print(f"[ERRO] Resposta JSON inválida Indeed: {e}")
-        return []
-    except Exception as e:
-        print(f"[ERRO] Erro inesperado Indeed: {e}")
-        return []
+def _buscar_indeed_via_jsearch(
+    query: str,
+    location: str,
+    page: int,
+    max_results: int
+) -> List[Dict]:
+    """Fallback do Indeed usando o agregador JSearch, restrito a links Indeed."""
+    for endpoint in JSEARCH_ENDPOINTS:
+        try:
+            vagas = _buscar_jsearch(
+                query, location, page, "all", max_results, endpoint,
+                apenas_indeed=True
+            )
+            if vagas:
+                print(f"[INFO][Indeed] Fallback JSearch retornou {len(vagas)} vagas do Indeed.")
+                return vagas
+        except requests.HTTPError:
+            continue
+        except (requests.RequestException, ValueError, TypeError):
+            continue
+    print("[AVISO][Indeed] Nenhuma fonte compatível retornou vagas brasileiras.")
+    return []
 
 
 # ========== GLASSDOOR (via RapidAPI) ==========
@@ -818,150 +1166,261 @@ def buscar_vagas_glassdoor(
     Requer RAPIDAPI_KEY configurado no .env
     """
     if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_API_KEY_HERE":
-        print("[AVISO] RapidAPI key não configurada (necessária para Glassdoor)")
+        print("[AVISO][Glassdoor] Integração indisponível: o endpoint configurado não é compatível com Glassdoor.")
         return []
 
-    url = "https://glassdoor-api.p.rapidapi.com/jobs/search"
+    return []
 
-    # Normalizar localização para formato Glassdoor
-    location_glassdoor = _normalizar_localizacao_glassdoor(location)
-
-    querystring = {
-        "job_title": query,
-        "location": location_glassdoor,
-        "page": str(page),
-        "job_type": "all"
-    }
-
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "glassdoor-api.p.rapidapi.com"
-    }
-
-    try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=30)
-        data = response.json()
-
-        if data.get("error"):
-            print(f"[AVISO] Glassdoor: {data['error']}")
-            return []
-
-        vagas = []
-        results = data.get("results", data.get("jobs", []))
-        for job in results:
-            vaga = {
-                "title": job.get("jobTitle", job.get("title", "")),
-                "company": job.get("employerName", job.get("company", "")),
-                "location": job.get("location", job.get("jobLocation", "")),
-                "description": job.get("jobDescription", job.get("description", "")),
-                "link": job.get("jobUrl", job.get("url", "")),
-                "posted_date": job.get("pubDate", job.get("posted", "")),
-                "source": "Glassdoor",
-                "apply_link": job.get("jobUrl", job.get("url", "")),
-                "tags": _extrair_tags({"description": job.get("jobDescription", job.get("description", ""))})
-            }
-            vagas.append(vaga)
-            if len(vagas) >= max_results:
-                break
-
-        return vagas
-
-    except requests.RequestException as e:
-        print(f"[ERRO] Falha na requisição Glassdoor: {e}")
-        return []
-    except json.JSONDecodeError as e:
-        print(f"[ERRO] Resposta JSON inválida Glassdoor: {e}")
-        return []
-    except Exception as e:
-        print(f"[ERRO] Erro inesperado Glassdoor: {e}")
-        return []
+    
 
 
 # ========== JSEARCH (via RapidAPI - Google Jobs alternativo) ==========
 
+# def buscar_vagas_jsearch(
+#     query: str,
+#     location: str = "Brasil",
+#     page: int = 1,
+#     max_results: int = 20
+# ) -> List[Dict]:
+#     """
+#     Busca vagas via JSearch API (RapidAPI: jsearch.p.rapidapi.com).
+#     Alternativa ao Google Jobs, com mais vagas de diversas fontes.
+#     Requer RAPIDAPI_KEY configurado no .env
+#     """
+#     if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_API_KEY_HERE":
+#         print("[AVISO] RapidAPI key não configurada (necessária para JSearch)")
+#         return []
+
+#     host = "jsearch.p.rapidapi.com"
+#     url = f"https://{host}/search-v2"
+
+#     # Normalizar localização para formato JSearch
+#     location_jsearch = _normalizar_localizacao_jsearch(location)
+
+#     # Para JSearch, se for cidade específica, usar formato apropriado
+#     if "-" in location:
+#         city_part, state_part = location.rsplit("-", 1)
+#         cidade_jsearch = city_part.strip()
+#         querystring = {
+#             "query": f"{query} in {cidade_jsearch}",
+#             "page": str(page),
+#             "num_pages": "1",
+#             "country": "br",
+#             "language": "pt"
+#         }
+#     else:
+#         querystring = {
+#             "query": f"{query} in {location_jsearch}",
+#             "page": str(page),
+#             "num_pages": "1",
+#             "country": "br",
+#             "language": "pt"
+#         }
+
+#     headers = {
+#         "X-RapidAPI-Key": RAPIDAPI_KEY,
+#         "X-RapidAPI-Host": host
+#     }
+
+#     try:
+#         response = requests.get(url, headers=headers, params=querystring, timeout=30)
+#         data = response.json()
+
+#         if data.get("status") != "OK" or data.get("error"):
+#             print(f"[AVISO] JSearch: {data.get('error', 'Erro desconhecido')}")
+#             return []
+
+#         vagas = []
+#         for job in data.get("data", []):
+#             vaga = {
+#                 "title": job.get("job_title", ""),
+#                 "company": job.get("employer_name", ""),
+#                 "location": job.get("job_city", job.get("job_location", "")),
+#                 "description": job.get("job_description", ""),
+#                 "link": job.get("job_apply_link", job.get("job_url", "")),
+#                 "posted_date": job.get("job_posted_at_datetime_utc", ""),
+#                 "source": "JSearch",
+#                 "apply_link": job.get("job_apply_link", job.get("job_url", "")),
+#                 "tags": _extrair_tags({"description": job.get("job_description", "")})
+#             }
+#             vagas.append(vaga)
+#             if len(vagas) >= max_results:
+#                 break
+
+#         return vagas
+
+#     except requests.RequestException as e:
+#         print(f"[ERRO] Falha na requisição JSearch: {e}")
+#         return []
+#     except json.JSONDecodeError as e:
+#         print(f"[ERRO] Resposta JSON inválida JSearch: {e}")
+#         return []
+#     except Exception as e:
+#         print(f"[ERRO] Erro inesperado JSearch: {e}")
+#         return []
+
+# ========== JSEARCH (via RapidAPI) ==========
+
 def buscar_vagas_jsearch(
     query: str,
-    location: str = "Brasil",
+    location: str = "br",
     page: int = 1,
+    date_posted: str = "all",
     max_results: int = 20
 ) -> List[Dict]:
     """
     Busca vagas via JSearch API (RapidAPI: jsearch.p.rapidapi.com).
-    Alternativa ao Google Jobs, com mais vagas de diversas fontes.
     Requer RAPIDAPI_KEY configurado no .env
     """
     if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_API_KEY_HERE":
-        print("[AVISO] RapidAPI key não configurada (necessária para JSearch)")
+        print("[AVISO][JSearch] RapidAPI key não configurada; fonte ignorada.")
         return []
 
-    url = "https://jsearch.p.rapidapi.com/search"
+    for endpoint in JSEARCH_ENDPOINTS:
+        try:
+            vagas = _buscar_jsearch(
+                query, location, page, date_posted, max_results, endpoint
+            )
+            return vagas
+        except requests.HTTPError as error:
+            status_code = error.response.status_code if error.response is not None else None
+            print(f"[AVISO][JSearch] Endpoint {endpoint} respondeu {status_code}; tentando o próximo.")
+        except requests.RequestException as error:
+            print(f"[AVISO][JSearch] Endpoint {endpoint} indisponível: {error}; tentando o próximo.")
+        except (ValueError, TypeError) as error:
+            print(f"[AVISO][JSearch] Resposta inválida em {endpoint}: {error}; tentando o próximo.")
 
-    # Normalizar localização para formato JSearch
-    location_jsearch = _normalizar_localizacao_jsearch(location)
+    print("[ERRO][JSearch] Nenhum endpoint configurado respondeu corretamente.")
+    return []
 
-    # Para JSearch, se for cidade específica, usar formato apropriado
-    if "-" in location:
-        city_part, state_part = location.rsplit("-", 1)
-        cidade_jsearch = city_part.strip()
-        querystring = {
-            "query": f"{query} in {cidade_jsearch}",
-            "page": str(page),
-            "num_pages": "1",
-            "country": "br",
-            "language": "pt"
-        }
-    else:
-        querystring = {
-            "query": f"{query} in {location_jsearch}",
-            "page": str(page),
-            "num_pages": "1",
-            "country": "br",
-            "language": "pt"
-        }
+
+def _buscar_jsearch(
+    query: str,
+    location: str,
+    page: int,
+    date_posted: str,
+    max_results: int,
+    endpoint: str,
+    apenas_indeed: bool = False
+) -> List[Dict]:
+    """Consulta uma rota JSearch e normaliza apenas vagas brasileiras."""
+    host = "jsearch.p.rapidapi.com"
+    url = f"https://{host}/{endpoint.lstrip('/')}"
+
+    termo_busca = f"{query} em {location or 'Brasil'}"
+
+    querystring = {
+        "query": termo_busca,
+        "page": str(page),
+        "num_pages": "1",
+        "date_posted": date_posted,
+        "country": "br",
+    }
 
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+        "X-RapidAPI-Host": host,
+        "Content-Type": "application/json",
     }
 
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=30)
-        data = response.json()
+        response = requests.get(url, headers=headers, params=querystring, timeout=(5, 20))
+        response.raise_for_status()
+        payload = response.json()
 
-        if data.get("status") != "OK" or data.get("error"):
-            print(f"[AVISO] JSearch: {data.get('error', 'Erro desconhecido')}")
-            return []
+        if not isinstance(payload, dict):
+            raise ValueError(f"formato {type(payload).__name__}")
+
+        data_content = payload.get("data", [])
+        if isinstance(data_content, dict):
+            jobs_data = data_content.get("jobs", [])
+        elif isinstance(data_content, list):
+            jobs_data = data_content
+        else:
+            jobs_data = []
 
         vagas = []
-        for job in data.get("data", []):
+        for job in jobs_data:
+            if not isinstance(job, dict):
+                continue
+            # Trata cidade e estado com fallback limpo
+            city = job.get("job_city") or ""
+            state = job.get("job_state") or ""
+            city_state = f"{city}, {state}".strip(" ,-")
+            location_job = job.get("job_location") or city_state or "Não especificado"
+            link = job.get("job_apply_link") or job.get("job_google_link", "")
+            publisher = str(job.get("job_publisher", "")).strip()
+
+            if not _localizacao_brasileira(location_job, job):
+                continue
+            if apenas_indeed and not (
+                "indeed" in publisher.lower() or "indeed" in link.lower()
+            ):
+                continue
+
+            # Montagem do objeto normalizado
             vaga = {
                 "title": job.get("job_title", ""),
                 "company": job.get("employer_name", ""),
-                "location": job.get("job_city", job.get("job_location", "")),
+                "location": location_job,
                 "description": job.get("job_description", ""),
-                "link": job.get("job_apply_link", job.get("job_url", "")),
-                "posted_date": job.get("job_posted_at_datetime_utc", ""),
-                "source": "JSearch",
-                "apply_link": job.get("job_apply_link", job.get("job_url", "")),
-                "tags": _extrair_tags({"description": job.get("job_description", "")})
+                "link": link,
+                "posted_date": job.get("job_posted_at", ""),
+                "source": "Indeed" if apenas_indeed else _identificar_fonte_jsearch(job, link, publisher),
+                "apply_link": job.get("job_apply_link") or link,
+                "tags": _extrair_tags({"description": job.get("job_description", "")}),
             }
             vagas.append(vaga)
+
             if len(vagas) >= max_results:
                 break
 
         return vagas
 
-    except requests.RequestException as e:
-        print(f"[ERRO] Falha na requisição JSearch: {e}")
-        return []
-    except json.JSONDecodeError as e:
-        print(f"[ERRO] Resposta JSON inválida JSearch: {e}")
-        return []
-    except Exception as e:
-        print(f"[ERRO] Erro inesperado JSearch: {e}")
-        return []
+    except (requests.RequestException, ValueError):
+        raise
 
 
+def _localizacao_brasileira(location: str, job: Optional[Dict] = None) -> bool:
+    """Impede que resultados fora do Brasil entrem nas fontes brasileiras."""
+    dados = job or {}
+    country = str(dados.get("job_country", "")).lower()
+    texto = f"{location} {dados.get('job_city', '')} {dados.get('job_state', '')}".lower()
+    texto = _remover_acentos(texto)
+    siglas_estados = {
+        " ac", " al", " ap", " am", " ba", " ce", " df", " es", " go",
+        " ma", " mt", " ms", " mg", " pa", " pb", " pr", " pe", " pi",
+        " rj", " rn", " rs", " ro", " rr", " sc", " sp", " se", " to"
+    }
+    return (
+        country in ("br", "bra", "brazil", "brasil")
+        or "brazil" in texto
+        or "brasil" in texto
+        or any(sigla in texto for sigla in siglas_estados)
+        or any(_remover_acentos(cidade) in texto for cidade in PRINCIPAIS_CIDADES)
+    )
+
+
+def _identificar_fonte_jsearch(job: Dict, link: str, publisher: str) -> str:
+    """Preserva a fonte original informada pelo JSearch."""
+    if publisher:
+        return publisher
+
+    url = link.lower()
+    fontes_por_dominio = {
+        "indeed": "Indeed",
+        "linkedin": "LinkedIn",
+        "glassdoor": "Glassdoor",
+        "jooble": "Jooble",
+        "ziprecruiter": "ZipRecruiter",
+    }
+    for dominio, fonte in fontes_por_dominio.items():
+        if dominio in url:
+            return fonte
+
+    return "JSearch"
+
+    
 # ========== NORMALIZAÇÃO DE LOCALIZAÇÃO POR API ==========
 
 def _normalizar_localizacao_brasil(location: str) -> dict:
@@ -1041,13 +1500,13 @@ def buscar_vagas_filtradas(
         "google": buscar_vagas_google_jobs,
         "jooble": buscar_vagas_jooble,
         "indeed": buscar_vagas_indeed,
-        "glassdoor": buscar_vagas_glassdoor,
         "jsearch": buscar_vagas_jsearch,
     }
 
-    # Se não especificou fontes, usar todas
+    # JSearch é a fonte agregadora padrão. Indeed só é consultado quando
+    # selecionado explicitamente pelo usuário.
     if not fontes:
-        fontes = list(fontes_disponiveis.keys())
+        fontes = ["google", "jooble", "jsearch"]
 
     # Construir queries para cada combinação
     # Se tipos_vaga foi fornecido (não-vazio), usar APENAS tipos (já inclui palavras-chave refinadas)
@@ -1069,6 +1528,12 @@ def buscar_vagas_filtradas(
         """
         q_lower = query.strip().lower()
         queries_extra = [query]  # sempre incluir o original
+
+        # Não gerar variações genéricas que removam o foco em QA/testes.
+        if any(termo in q_lower for termo in (
+            "qa", "quality", "qualidade", "test", "teste", "sdet"
+        )):
+            return queries_extra
 
         # Se for um termo único (ex: "python"), gerar variações
         palavras = q_lower.split()
@@ -1107,10 +1572,18 @@ def buscar_vagas_filtradas(
             # tipos_vaga vazio - cada item de tipos_para_busca (que == palavras_chave) já é a query completa
             queries = [tipo]
 
+        # Consultas genéricas são direcionadas para QA/testes. Consultas que
+        # já citam a área permanecem intactas para preservar a especificidade.
+        queries = _gerar_queries_qualidade(queries[0])
+
         # Para Google, expandir queries alternativas para obter mais resultados
         # (SerpAPI não suporta paginação efetiva no motor google_jobs)
         if "google" in fontes:
-            queries = _gerar_queries_alternativas(queries[0]) if len(queries) == 1 else queries
+            queries = [
+                alternativa
+                for query_base in queries
+                for alternativa in _gerar_queries_alternativas(query_base)
+            ]
             # Remover duplicatas mantendo ordem
             queries = list(dict.fromkeys(queries))
 
@@ -1132,7 +1605,10 @@ def buscar_vagas_filtradas(
                         else:
                             vagas = func(query, location=local, page=1, max_results=max_results)
 
-                        print(f"[INFO] {fonte.upper()}: {len(vagas)} vagas para '{query}' em '{local}'")
+                        if vagas:
+                            print(f"[INFO][{fonte.upper()}] {len(vagas)} vagas encontradas para '{query}' em '{local}'.")
+                        else:
+                            print(f"[AVISO][{fonte.upper()}] Nenhuma vaga retornada para '{query}' em '{local}'.")
 
                         # Aplicar filtro de modelo de trabalho
                         for vaga in vagas:
@@ -1184,7 +1660,7 @@ def buscar_vagas_filtradas(
                                     )
 
                     except Exception as e:
-                        print(f"[ERRO] Falha ao buscar em {fonte}: {e}")
+                        print(f"[ERRO][{fonte.upper()}] Falha ao executar a busca: {e}")
                         continue
 
     # Ordenar por relevância e recência (mais recentes primeiro para empates)

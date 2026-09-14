@@ -17,7 +17,7 @@ _BACKEND_DIR = Path(__file__).resolve().parent
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-from config import RESUME_ENCRYPTED
+from config import DEFAULT_JOB_SEARCH_TERM, RESUME_ENCRYPTED
 from security import salvar_curriculo, carregar_curriculo
 from job_scraper import buscar_vagas_filtradas
 from job_matcher import parse_curriculo, calcula_match, classificar_vaga, gerar_recomendacoes
@@ -173,6 +173,10 @@ async def buscar_vagas_por_perfil(
             status_code=400
         )
 
+    # O campo continua editável, mas a busca padrão deve permanecer na área
+    # de qualidade e testes de software.
+    termo_busca = (termo_busca or "").strip() or DEFAULT_JOB_SEARCH_TERM
+
     # Extrair habilidades do currículo para logs
     habs = curriculo.get("habilidades", [])
     if isinstance(habs, set):
@@ -191,7 +195,7 @@ async def buscar_vagas_por_perfil(
 
     print(f"[INFO] Buscando '{termo_busca}' em '{regiao}'")
     print(f"[INFO] Filtros: modelos={modelos_list}, fontes={fontes_list}")
-    print(f"[INFO] Habilidades do currículo: {habs[:10]}...")
+    print(f"[INFO] Habilidades do currículo ({len(habs)}): {sorted(habs)}")
     print(f"[INFO] Nível detectado do candidato: {nivel_candidato}")
 
     # Mapear fontes (nomes antigos para novos)
@@ -204,7 +208,6 @@ async def buscar_vagas_por_perfil(
         "google": "google",
         "jooble": "jooble",
         "indeed": "indeed",
-        "glassdoor": "glassdoor",
         "jsearch": "jsearch",
     }
 
@@ -241,7 +244,11 @@ async def buscar_vagas_por_perfil(
             "vagas": [],
             "total": 0,
             "termo_busca": termo_busca,
-            "mensagem": "Nenhuma vaga encontrada com os filtros aplicados."
+            "mensagem": (
+                "Nenhuma vaga foi encontrada. Verifique as chaves das APIs, "
+                "a conexão com a internet ou tente outro termo/localização."
+            ),
+            "fontes_consultadas": fontes_selecionadas or ["google", "jooble", "indeed", "jsearch"]
         })
 
     # Calcular match para cada vaga
