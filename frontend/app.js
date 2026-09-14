@@ -344,11 +344,10 @@ class VagaMatchApp {
                 ? Array.from(curriculo.habilidades)
                 : curriculo.habilidades.split(/[\s,;]+/).filter(Boolean))
             : [];
-        const habilidadesHtml = habilidades.slice(0, 8).map(s => `<span class="tag">${s}</span>`).join("");
+        const habilidadesHtml = habilidades.map(s => `<span class="tag">${s}</span>`).join("");
 
         preview.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h4 style="font-weight: 600;">Currículo capturado:</h4>
                 <span style="color: #22c55e; font-weight: 600;">✓ Pronto</span>
             </div>
             <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;">
