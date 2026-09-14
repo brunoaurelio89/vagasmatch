@@ -2,6 +2,7 @@
 VagaMatch - Backend API (FastAPI)
 """
 import sys
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict
@@ -22,6 +23,8 @@ from security import salvar_curriculo, carregar_curriculo
 from job_scraper import buscar_vagas_filtradas
 from job_matcher import parse_curriculo, calcula_match, classificar_vaga, gerar_recomendacoes
 from resume_parser import processar_curriculo_upload
+
+_linkedin_logger = logging.getLogger("vagamatch.linkedin")
 
 # Inicializar FastAPI
 app = FastAPI(
@@ -200,7 +203,7 @@ async def buscar_vagas_por_perfil(
 
     # Mapear fontes (nomes antigos para novos)
     mapa_fontes = {
-        "linkedin": "jsearch",
+        "linkedin": "linkedin",
         "jobbol": "jsearch",
         "vagas.com": "jooble",
         "vagas": "jooble",
@@ -217,6 +220,17 @@ async def buscar_vagas_por_perfil(
             mapeado = mapa_fontes.get(f)
             if mapeado and mapeado not in fontes_selecionadas:
                 fontes_selecionadas.append(mapeado)
+    else:
+        # Sem filtros de fonte, consultar também o LinkedIn por padrão.
+        fontes_selecionadas = ["google", "jooble", "linkedin", "jsearch"]
+
+    linkedin_selecionado = "linkedin" in fontes_selecionadas
+    if linkedin_selecionado:
+        _linkedin_logger.info(
+            "Fonte LinkedIn selecionada para a busca title=%r location=%r",
+            termo_busca,
+            regiao,
+        )
 
     # Buscar vagas em múltiplas APIs com filtros de modelo de trabalho
     # Usar cache para evitar chamadas repetidas às APIs (TTL: 30 minutos)
@@ -225,6 +239,12 @@ async def buscar_vagas_por_perfil(
     vagas = _cache_get(cache_key)
     cache_hit = vagas is not None
     if not cache_hit:
+        if linkedin_selecionado:
+            _linkedin_logger.info(
+                "Cache da aplicação ausente; iniciando fluxo de busca do LinkedIn "
+                "title=%r",
+                termo_busca,
+            )
         recencia = int(recencia_dias) if recencia_dias else 0
         vagas = buscar_vagas_filtradas(
             palavras_chave=[termo_busca],
@@ -232,12 +252,19 @@ async def buscar_vagas_por_perfil(
             modelos_trabalho=modelos_list if modelos_list else [],
             regioes=[regiao] if regiao else [],
             max_results=50,
-            fontes=fontes_selecionadas if fontes_selecionadas else None,
+            fontes=fontes_selecionadas,
             recencia_dias=recencia
         )
         _cache_set(cache_key, vagas)
     else:
         print(f"[INFO] Cache hit: {len(vagas)} vagas recuperadas do cache")
+        if linkedin_selecionado:
+            _linkedin_logger.info(
+                "Cache utilizado para LinkedIn; API não foi chamada nesta execução "
+                "title=%r total=%s",
+                termo_busca,
+                len(vagas),
+            )
 
     if not vagas:
         return JSONResponse(content={
@@ -248,7 +275,9 @@ async def buscar_vagas_por_perfil(
                 "Nenhuma vaga foi encontrada. Verifique as chaves das APIs, "
                 "a conexão com a internet ou tente outro termo/localização."
             ),
-            "fontes_consultadas": fontes_selecionadas or ["google", "jooble", "indeed", "jsearch"]
+            "fontes_consultadas": fontes_selecionadas or [
+                "google", "jooble", "linkedin", "indeed", "jsearch"
+            ]
         })
 
     # Calcular match para cada vaga
