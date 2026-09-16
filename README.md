@@ -32,30 +32,30 @@ O VagaMatch analisa seu currículo, detecta seu nível de experiência (Júnior/
 
 ```bash
 # 1. Clone ou extraia o projeto
-cd C:\Users\Vitor Hugo Gianini\Desktop\VagaMatch
+cd caminho\para\VagaMatch
 
 # 2. Instale as dependências
-pip install -r backend/requirements.txt
+python -m pip install "fastapi>=0.104.0" "uvicorn>=0.23.0" "python-multipart>=0.0.6" "requests>=2.31.0" "cryptography>=41.0.0" "python-dotenv>=1.0.0" "pypdf>=4.0.0" "python-docx>=0.8.11"
 
 # 3. Configure as APIs
 copy .env.example .env
 # Edite .env e adicione suas chaves
 
 # 4. Inicie o servidor
-python run.py
+python -m uvicorn backend.app:app --host 0.0.0.0 --port 8001
 ```
 
-Acesse: **http://localhost:8000**
+Acesse: **http://localhost:8001**
 
 ---
 
 ## 🔑 Configuração de APIs
 
-| API | Onde obter | Limite grátis | Obrigatório? |
-|-----|-----------|--------------|--------------|
-| **SerpAPI** (Google Jobs) | [serpapi.com](https://serpapi.com) | 100/mês | ✅ Sim |
-| **Jooble** | [jooble.org/api](https://jooble.org/api/about) | Ilimitado* | ⭐ Recomendado |
-| **RapidAPI** (Indeed, Glassdoor, JSearch) | [rapidapi.com](https://rapidapi.com) | 500/dia | ⭐ Recomendado |
+| API | URL original para cadastro | Limite grátis | Obrigatório? |
+|-----|----------------------------|--------------|--------------|
+| **SerpAPI** (Google Jobs) | [https://serpapi.com/users/sign_up](https://serpapi.com/users/sign_up) | 100/mês | ✅ Sim |
+| **Jooble** | [https://jooble.org/api/about](https://jooble.org/api/about) | Ilimitado* | ⭐ Recomendado |
+| **RapidAPI** (Indeed, Glassdoor, JSearch) | [https://rapidapi.com/auth/sign-up](https://rapidapi.com/auth/sign-up) | 500/dia | ⭐ Recomendado |
 
 *Jooble tem limite de requisições por minuto, mas é gratuito.
 
@@ -177,6 +177,19 @@ VagaMatch/
 - **APIs:** SerpAPI, Jooble, RapidAPI (Indeed, Glassdoor, JSearch)
 - **Segurança:** Cryptography (Fernet)
 
+### Dependências Python
+
+| Dependência | Versão mínima | Finalidade |
+|-------------|---------------|------------|
+| FastAPI | 0.104.0 | API web |
+| Uvicorn | 0.23.0 | Servidor ASGI |
+| python-multipart | 0.0.6 | Upload de arquivos |
+| Requests | 2.31.0 | Requisições HTTP |
+| Cryptography | 41.0.0 | Criptografia do currículo |
+| python-dotenv | 1.0.0 | Carregamento de variáveis de ambiente |
+| pypdf | 4.0.0 | Leitura de arquivos PDF |
+| python-docx | 0.8.11 | Leitura de arquivos DOCX |
+
 ---
 
 ## 📝 Roadmap
@@ -200,4 +213,4 @@ MIT — Uso livre para fins pessoais e comerciais.
 
 ---
 
-**Feito com ❤️ por Vitor Hugo Gianini**
+**Projeto VagaMatch**
