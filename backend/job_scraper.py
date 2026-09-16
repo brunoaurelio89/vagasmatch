@@ -7,9 +7,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import time
-import logging
 from functools import lru_cache
-from pathlib import Path
 
 # Adicionado por conta do novo trecho _remover_acentos que é chamado pelo _normalizar_localizacao
 import unicodedata
@@ -22,23 +20,8 @@ from typing import Tuple
 from config import (
     SERPAPI_KEY, JOOBLE_API_KEY, RAPIDAPI_KEY,
     INDERED_API_KEY, GLASSDOOR_API_KEY, JOB_CACHE_MINUTES,
-    INDEED_API_HOSTS, JSEARCH_ENDPOINTS, LINKEDIN_TIME_FRAME
+    INDEED_API_HOSTS, JSEARCH_ENDPOINTS
 )
-
-_LINKEDIN_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
-_LINKEDIN_LOG_DIR.mkdir(parents=True, exist_ok=True)
-_linkedin_logger = logging.getLogger("vagamatch.linkedin")
-if not _linkedin_logger.handlers:
-    _linkedin_logger.setLevel(logging.INFO)
-    _linkedin_handler = logging.FileHandler(
-        _LINKEDIN_LOG_DIR / "linkedin_search.log",
-        encoding="utf-8"
-    )
-    _linkedin_handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)s %(message)s"
-    ))
-    _linkedin_logger.addHandler(_linkedin_handler)
-    _linkedin_logger.propagate = False
 
 
 # ========== CACHE DE VAGAS ==========
@@ -792,6 +775,8 @@ def buscar_vagas_google_jobs(
                     todas_vagas.append(vaga)
                     novos += 1
 
+                print(f"[INFO] Google Jobs ({loc}, pág {pagina}): {novos} vagas novas")
+
                 if novos < 3:
                     break
 
@@ -928,123 +913,6 @@ def buscar_vagas_indeed(
 
     # Último fallback: JSearch, limitado a publicações cujo link/provedor seja Indeed.
     return _buscar_indeed_via_jsearch(query, location, page, max_results)
-
-
-# ========== LINKEDIN (via RapidAPI) ==========
-
-def buscar_vagas_linkedin(
-    query: str,
-    location: str = "Brasil",
-    page: int = 1,
-    max_results: int = 20
-) -> List[Dict]:
-    """Busca todas as vagas brasileiras no endpoint de vagas ativas do LinkedIn."""
-    if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_API_KEY_HERE":
-        mensagem = "RapidAPI key não configurada; fonte ignorada."
-        print(f"[AVISO][LinkedIn] {mensagem}")
-        _linkedin_logger.warning(mensagem)
-        return []
-
-    host = "linkedin-job-search-api.p.rapidapi.com"
-    url = f"https://{host}/active-jb"
-    headers = {
-        "X-RapidAPI-Key": RAPIDAPI_KEY,
-        "X-RapidAPI-Host": host,
-    }
-    vagas = []
-    offset = max(page - 1, 0) * 20
-
-    _linkedin_logger.info(
-        "Iniciando busca title=%r location=%r time_frame=%s",
-        query,
-        location,
-        LINKEDIN_TIME_FRAME,
-    )
-
-    while True:
-        params = {
-            "time_frame": LINKEDIN_TIME_FRAME,
-            "limit": "20",
-            "offset": str(offset),
-            "description_format": "text",
-            "title": query,
-            "location": "Brazil",
-        }
-        try:
-            response = requests.get(
-                url, headers=headers, params=params, timeout=(5, 30)
-            )
-            response.raise_for_status()
-            payload = response.json()
-        except (requests.RequestException, ValueError) as error:
-            _linkedin_logger.error(
-                "Falha na página offset=%s title=%r: %s", offset, query, error
-            )
-            print(f"[ERRO][LinkedIn] Falha ao consultar a API: {error}")
-            return vagas
-
-        if isinstance(payload, list):
-            jobs = payload
-        elif isinstance(payload, dict):
-            jobs = payload.get("data", payload.get("jobs", []))
-        else:
-            jobs = []
-        if isinstance(jobs, dict):
-            jobs = jobs.get("jobs", jobs.get("results", []))
-        if not isinstance(jobs, list):
-            raise ValueError("Resposta do LinkedIn não contém uma lista de vagas")
-
-        _linkedin_logger.info(
-            "Página offset=%s retornou %s resultados", offset, len(jobs)
-        )
-        if not jobs:
-            break
-
-        for job in jobs:
-            if not isinstance(job, dict):
-                continue
-            description = job.get("description") or job.get("job_description") or ""
-            link = (
-                job.get("url")
-                or job.get("job_url")
-                or job.get("linkedin_url")
-                or ""
-            )
-            vagas.append({
-                "title": job.get("title") or job.get("job_title") or "",
-                "company": (
-                    job.get("organization")
-                    or job.get("company")
-                    or job.get("company_name")
-                    or ""
-                ),
-                "location": (
-                    job.get("location")
-                    or job.get("job_location")
-                    or "Brazil"
-                ),
-                "description": description,
-                "link": link,
-                "posted_date": (
-                    job.get("date_posted")
-                    or job.get("posted_date")
-                    or job.get("date_created")
-                    or ""
-                ),
-                "source": "LinkedIn",
-                "apply_link": job.get("apply_url") or link,
-                "tags": _extrair_tags({"description": description}),
-            })
-
-        if len(jobs) < 20:
-            break
-        offset += 20
-
-    _linkedin_logger.info(
-        "Busca concluída title=%r total_normalizado=%s", query, len(vagas)
-    )
-    print(f"[INFO][LinkedIn] {len(vagas)} vagas encontradas para '{query}' no Brasil.")
-    return vagas
 
 
 def _buscar_indeed_rapidapi(
@@ -1369,13 +1237,6 @@ def buscar_vagas_filtradas(
     )
     vagas_cacheadas = _cache_get(cache_key)
     if vagas_cacheadas is not None:
-        if fontes and "linkedin" in fontes:
-            _linkedin_logger.info(
-                "Cache do scraper utilizado; API do LinkedIn não foi chamada "
-                "title=%r total=%s",
-                " ".join(palavras_chave),
-                len(vagas_cacheadas),
-            )
         return vagas_cacheadas
 
     todos_resultados = []
@@ -1386,25 +1247,13 @@ def buscar_vagas_filtradas(
         "google": buscar_vagas_google_jobs,
         "jooble": buscar_vagas_jooble,
         "indeed": buscar_vagas_indeed,
-        "linkedin": buscar_vagas_linkedin,
         "jsearch": buscar_vagas_jsearch,
     }
 
-    # Fontes padrão quando o usuário não restringe a busca por fonte.
+    # JSearch é a fonte agregadora padrão. Indeed só é consultado quando
+    # selecionado explicitamente pelo usuário.
     if not fontes:
-        fontes = ["google", "jooble", "linkedin", "jsearch"]
-        _linkedin_logger.info(
-            "Nenhuma fonte foi filtrada; LinkedIn incluído nas fontes padrão "
-            "title=%r",
-            " ".join(palavras_chave),
-        )
-
-    if "linkedin" in fontes:
-        _linkedin_logger.info(
-            "API do LinkedIn será consultada title=%r location=%r",
-            " ".join(palavras_chave),
-            regioes[0] if regioes else "Brasil",
-        )
+        fontes = ["google", "jooble", "jsearch"]
 
     # Construir queries para cada combinação
     # Se tipos_vaga foi fornecido (não-vazio), usar APENAS tipos (já inclui palavras-chave refinadas)
@@ -1472,8 +1321,7 @@ def buscar_vagas_filtradas(
 
         # Consultas genéricas são direcionadas para QA/testes. Consultas que
         # já citam a área permanecem intactas para preservar a especificidade.
-        # O título enviado ao LinkedIn deve ser exatamente o digitado pelo usuário.
-        queries = [queries[0]] if "linkedin" in fontes else _gerar_queries_qualidade(queries[0])
+        queries = _gerar_queries_qualidade(queries[0])
 
         # Para Google, expandir queries alternativas para obter mais resultados
         # (SerpAPI não suporta paginação efetiva no motor google_jobs)
@@ -1501,12 +1349,6 @@ def buscar_vagas_filtradas(
                             vagas = func(query, location=local, page=1, max_results=max_results)
                         elif fonte == "jooble":
                             vagas = func(query, location=local, page=1, max_results=max_results)
-                        elif fonte == "linkedin":
-                            print(
-                                f"[INFO][LINKEDIN] Buscando vagas para '{query}' "
-                                f"em 'Brazil'."
-                            )
-                            vagas = func(query, location="Brazil", page=1, max_results=max_results)
                         else:
                             vagas = func(query, location=local, page=1, max_results=max_results)
 
@@ -1601,12 +1443,9 @@ def buscar_vagas_filtradas(
         resultados = resultados_filtrados
 
     # Salvar no cache
-    # A busca do LinkedIn pagina até esgotar a API e não possui limite de vagas.
-    limite = None if "linkedin" in fontes else max_results
-    resultado_final = resultados if limite is None else resultados[:limite]
-    _cache_set(cache_key, resultado_final)
+    _cache_set(cache_key, resultados[:max_results])
 
-    return resultado_final
+    return resultados[:max_results]
 
 
 def _extrair_tags(job: dict) -> List[str]:
@@ -1784,6 +1623,5 @@ def validar_api_keys() -> Dict[str, bool]:
         "jooble": bool(JOOBLE_API_KEY and JOOBLE_API_KEY != "YOUR_API_KEY_HERE"),
         "indeed": bool(RAPIDAPI_KEY and RAPIDAPI_KEY != "YOUR_API_KEY_HERE"),
         "glassdoor": bool(RAPIDAPI_KEY and RAPIDAPI_KEY != "YOUR_API_KEY_HERE"),
-        "jsearch": bool(RAPIDAPI_KEY and RAPIDAPI_KEY != "YOUR_API_KEY_HERE"),
-        "linkedin": bool(RAPIDAPI_KEY and RAPIDAPI_KEY != "YOUR_API_KEY_HERE")
+        "jsearch": bool(RAPIDAPI_KEY and RAPIDAPI_KEY != "YOUR_API_KEY_HERE")
     }

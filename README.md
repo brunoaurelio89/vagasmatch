@@ -12,7 +12,7 @@ O VagaMatch analisa seu currículo, detecta seu nível de experiência (Júnior/
 |---------|-----------|
 | **Análise de currículo** | Extrai habilidades e experiência automaticamente de PDF, DOCX ou TXT |
 | **Detecção de nível** | Identifica se você é Júnior, Pleno ou Sênior baseado no currículo |
-| **Busca multi-fonte** | Google Jobs, Jooble, Indeed, LinkedIn, Glassdoor e JSearch em uma busca só, direcionada a QA, qualidade e testes de software |
+| **Busca multi-fonte** | Google Jobs, Jooble, Indeed, Glassdoor e JSearch em uma busca só, direcionada a QA, qualidade e testes de software |
 | **Match por nível** | Prioriza vagas compatíveis com seu nível de experiência |
 | **Score de aderência** | Calcula % de compatibilidade (habilidades + nível + experiência) |
 | **Recomendações** | Sugere habilidades para melhorar seu perfil |
@@ -55,7 +55,7 @@ Acesse: **http://localhost:8000**
 |-----|-----------|--------------|--------------|
 | **SerpAPI** (Google Jobs) | [serpapi.com](https://serpapi.com) | 100/mês | ✅ Sim |
 | **Jooble** | [jooble.org/api](https://jooble.org/api/about) | Ilimitado* | ⭐ Recomendado |
-| **RapidAPI** (Indeed, LinkedIn, Glassdoor, JSearch) | [rapidapi.com](https://rapidapi.com) | 500/dia | ⭐ Recomendado |
+| **RapidAPI** (Indeed, Glassdoor, JSearch) | [rapidapi.com](https://rapidapi.com) | 500/dia | ⭐ Recomendado |
 
 *Jooble tem limite de requisições por minuto, mas é gratuito.
 
@@ -65,10 +65,6 @@ SERPAPI_KEY=sua_chave_serpapi
 JOOBLE_API_KEY=sua_chave_jooble
 RAPIDAPI_KEY=sua_chave_rapidapi
 ```
-
-A busca do LinkedIn usa a janela `24h` por padrão, pagina em lotes de 20 e
-registra as consultas em `logs/linkedin_search.log`. A janela pode ser alterada
-na variável `LINKEDIN_TIME_FRAME` em `backend/config.py`.
 
 ---
 

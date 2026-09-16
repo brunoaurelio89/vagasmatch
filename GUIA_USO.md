@@ -41,7 +41,7 @@ Quanto mais APIs você configurar, mais vagas encontrará.
 |-----|-----------|-----------|------------|
 | **SerpAPI** (Google Jobs) | serpapi.com | 100/mês | ✅ Sim (base) |
 | **Jooble** | jooble.org/api/about | Sim | ⭐ Recomendado |
-| **RapidAPI** (Indeed, LinkedIn, Glassdoor, JSearch) | rapidapi.com | 500/dia | ⭐ Recomendado |
+| **RapidAPI** (Indeed, Glassdoor, JSearch) | rapidapi.com | 500/dia | ⭐ Recomendado |
 
 **Exemplo de .env:**
 ```env
