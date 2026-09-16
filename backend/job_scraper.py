@@ -1031,7 +1031,34 @@ def buscar_vagas_jsearch(
             return vagas
         except requests.HTTPError as error:
             status_code = error.response.status_code if error.response is not None else None
-            print(f"[AVISO][JSearch] Endpoint {endpoint} respondeu {status_code}; tentando o próximo.")
+            if status_code == 404:
+                print(
+                    f"[ERRO][JSearch] Endpoint {endpoint} não encontrado (404); "
+                    "verifique a rota e a assinatura da RapidAPI."
+                )
+                return []
+            if status_code in (401, 403):
+                print(
+                    f"[ERRO][JSearch] Acesso negado no endpoint {endpoint} "
+                    f"({status_code}); verifique a RAPIDAPI_KEY e o plano."
+                )
+                return []
+            if status_code == 429:
+                retry_after = (
+                    error.response.headers.get("Retry-After", "")
+                    if error.response is not None
+                    else ""
+                )
+                detalhe = f"; Retry-After={retry_after}s" if retry_after else ""
+                print(
+                    f"[AVISO][JSearch] Limite de requisições atingido no endpoint "
+                    f"{endpoint} (429){detalhe}."
+                )
+                return []
+            print(
+                f"[AVISO][JSearch] Endpoint {endpoint} respondeu {status_code}; "
+                "tentando o próximo."
+            )
         except requests.RequestException as error:
             print(f"[AVISO][JSearch] Endpoint {endpoint} indisponível: {error}; tentando o próximo.")
         except (ValueError, TypeError) as error:
@@ -1071,7 +1098,7 @@ def _buscar_jsearch(
     }
 
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=(5, 20))
+        response = requests.get(url, headers=headers, params=querystring, timeout=(10, 45))
         response.raise_for_status()
         payload = response.json()
 

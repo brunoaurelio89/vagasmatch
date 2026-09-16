@@ -36,7 +36,7 @@ INDERED_API_KEY = os.getenv("INDERED_API_KEY", "YOUR_API_KEY_HERE")
 GLASSDOOR_API_KEY = os.getenv("GLASSDOOR_API_KEY", "YOUR_API_KEY_HERE")
 JSEARCH_ENDPOINTS = [
     endpoint.strip()
-    for endpoint in os.getenv("JSEARCH_ENDPOINTS", "/search-v2,/search").split(",")
+    for endpoint in os.getenv("JSEARCH_ENDPOINTS", "/search-v2").split(",")
     if endpoint.strip()
 ]
 INDEED_API_HOSTS = [
